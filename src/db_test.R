@@ -102,9 +102,7 @@ titles_db_to_be_deleted <- titles_db %>%
 
 ids_to_be_deleted <- str_flatten(titles_db_to_be_deleted$id, collapse = ", ")
 
-sqlstmt <- "
-delete from wp_nipper_pgm_titles where id in (@IDS)
-"
+sqlstmt <- "truncate table wp_nipper_main_playlists"
 sqlstmt <- sqlstmt %>% str_replace("@IDS", ids_to_be_deleted)
 
 sql_result <- dbExecute(conn = ns_con, statement = sqlstmt)
