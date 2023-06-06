@@ -1,12 +1,4 @@
-suppressWarnings(suppressPackageStartupMessages(library(DBI)))
-suppressWarnings(suppressPackageStartupMessages(library(googlesheets4)))
-suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
-suppressWarnings(suppressPackageStartupMessages(library(stringr)))
-suppressWarnings(suppressPackageStartupMessages(library(stringi)))
-suppressWarnings(suppressPackageStartupMessages(library(lubridate)))
-suppressWarnings(suppressPackageStartupMessages(library(readr)))
-suppressWarnings(suppressPackageStartupMessages(library(fs)))
-suppressWarnings(suppressPackageStartupMessages(library(futile.logger)))
+pacman::p_load(DBI, googlesheets4, dplyr, stringr, stringi, lubridate, readr, fs, futile.logger)
 
 f1 <- flog.appender(appender.file("c:/cz_salsa/Logs/nipperstudio_build_week.log"), name = "nsbw_log")
 flog.info("
