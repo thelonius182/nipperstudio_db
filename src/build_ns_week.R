@@ -7,6 +7,13 @@ rds_home <- "C:/cz_salsa/cz_exchange/"
 source("src/shared_functions.R", encoding = "UTF-8") 
 
 # nieuwe playlists voor WP ----
+# TEMP: initial load gidsweken ----
+# rds_files <- dir_ls(rds_home, type = "file", regexp = "nipperstudio_week")
+# 
+# ns_week <- do.call(bind_rows, lapply(rds_files, function(rdsf) {
+#   read_rds(rdsf) %>% as_tibble()
+# }))
+
 # + nieuwe gidsweek ophalen ----
 ns_week <- read_rds(paste0(rds_home, "nipperstudio_week.RDS"))
 log_txt <- paste0("deze week: ", min(ns_week$date_time), " - ", max(ns_week$date_time))
@@ -59,7 +66,7 @@ ns_week.2 <- ns_week.1 %>%
 # WP-items ophalen ----
 # + connect to DB ----
 # ns_con <- dbConnect(odbc::odbc(), "wpdev_mariadb", timeout = 10, encoding = "CP850")
-ns_con <- get_ns_conn("DEV")
+ns_con <- get_ns_conn("PRD")
 
 stopifnot("WP-database is niet beschikbaar, zie C:/cz_salsa/Logs/nipperstudio_build_week.log" = typeof(ns_con) == "S4")
 flog.info("Verbonden!", name = "nsbw_log")
@@ -69,12 +76,11 @@ flog.info("Verbonden!", name = "nsbw_log")
 
 # + posts ----
 ts_list <- paste0("('", ns_week.2$pl_ts %>% str_flatten(collapse = "', '"), "')")
-sqlstmt <- str_replace("
+sqlstmt <- sprintf("
 select po1.post_date, po1.id from wp_posts po1
    left join wp_term_relationships tr1 on tr1.object_id = po1.id
 where post_type = 'programma' and term_taxonomy_id = 5
-  and post_date in @TSLIST
-", "@TSLIST", ts_list)
+  and post_date in %s;", ts_list)
 post_ids <- dbGetQuery(conn = ns_con, statement = sqlstmt)
 no_posts <- "Geen gepubliceerde posts gevonden voor deze week >> geen playlists toegevoegd aan NipperStudio."
 
@@ -86,13 +92,13 @@ if (nrow(post_ids) == 0) {
 # stopifnot accepteert geen variable voor de mededeling
 stopifnot("Geen gepubliceerde posts gevonden voor deze week >> geen playlists toegevoegd aan NipperStudio." = nrow(post_ids) > 0)
 
-wp_playlists <- ns_week.2 %>% 
+ns_week.3 <- ns_week.2 %>% 
   inner_join(post_ids, by = c("pl_ts" = "post_date")) %>% 
   select(post_id = id, playlist_name = pl_name, starts_with("pl_ts_"), nipper_mogelijk)
 
 # + titels en redacteuren ----
 poids <- paste0("('", post_ids$id %>% str_flatten(collapse = "', '"), "')")
-sqlstmt <- "
+sqlstmt <- sprintf("
 select po1.id as pgm_id,
        te1.name as term_name,
        case when tx1.taxonomy = 'programma_genre' then 'pgm_title'
@@ -106,10 +112,10 @@ from wp_posts po1
    left join wp_term_taxonomy tx1 on tx1.term_taxonomy_id= tr1.term_taxonomy_id
 where (tx1.taxonomy = 'programma_maker' 
        or tx1.taxonomy = 'programma_genre' and tx1.parent > 0)
-      and po1.id in @POIDS
-"
-sqlstmt <- str_replace(sqlstmt, "@POIDS", poids)
+      and po1.id in %s;", poids)
+
 db_post_details <- dbGetQuery(conn = ns_con, statement = sqlstmt)
+
 post_details <- db_post_details %>% group_by(pgm_id, term_type) %>% 
   mutate(rank = row_number()) %>% ungroup() %>% 
   filter(rank == 1) %>% select(post_id = pgm_id, everything(), -rank)
@@ -117,8 +123,7 @@ post_details <- db_post_details %>% group_by(pgm_id, term_type) %>%
 # + user_id's ----
 pgm_editor <- post_details %>% filter(term_type == 'pgm_editor') %>% select(term_name)
 editor_list <- paste0("('", pgm_editor$term_name %>% str_flatten(collapse = "', '"), "')")
-sqlstmt <- "select display_name, id as user_id from wp_users where display_name in @EDLST"
-sqlstmt <- str_replace(sqlstmt, "@EDLST", editor_list)
+sqlstmt <- sprintf("select display_name, id as user_id from wp_users where display_name in %s;", editor_list)
 db_users <- dbGetQuery(conn = ns_con, statement = sqlstmt)
 wp_user_ids <- post_details %>% 
   filter(term_type == "pgm_editor") %>% 
@@ -134,15 +139,17 @@ wp_pgm_ids <- post_details %>%
 # + maak de huidige ----
 nipper_main_playlists_cur <- wp_pgm_ids %>% 
   inner_join(wp_user_ids) %>% 
-  inner_join(wp_playlists) %>% 
+  inner_join(ns_week.3) %>% 
   mutate(datetime_created = now(tzone = "Europe/Amsterdam"),
          finished = 0L,
          deleted = 0L,
-         block_transition = if_else(nipper_mogelijk == "BUM", "LOB", nipper_mogelijk)) %>% 
+         block_transition = if_else(nipper_mogelijk == "BUM", "LOB", nipper_mogelijk),
+         # block_transition = if_else(str_detect(playlist_name, "20230613|20230615"), "HIB", block_transition),
+         program_date = ymd(pl_ts_ymd)) %>% 
   select(post_id,
          datetime_created,
          program_id,
-         program_date = pl_ts_ymd,
+         program_date,
          time_start = pl_ts_start,
          time_end = pl_ts_stop,
          user_id,
@@ -150,6 +157,8 @@ nipper_main_playlists_cur <- wp_pgm_ids %>%
          playlist_name,
          block_transition,
          deleted) 
+
+write_rds(nipper_main_playlists_cur, paste0(rds_home, "nipper_main_playlists.RDS"))
 
 # + valideer user ----
 nipper_main_playlists_err <- nipper_main_playlists_cur %>% filter(is.na(user_id))
@@ -161,19 +170,20 @@ if (nrow(nipper_main_playlists_err) > 0) {
   nipper_main_playlists_cur <- nipper_main_playlists_cur %>% filter(!is.na(user_id))
 }
 
-# + lees archief ----
-nipper_main_playlists_his <- read_rds(paste0(rds_home, "nipper_main_playlists.RDS"))
+# + lees WP-voorraad ----
+query <- "select * from wp_nipper_main_playlists"
+wp_stock <- dbGetQuery(ns_con, query)
+# nipper_main_playlists_his <- read_rds(paste0(rds_home, "nipper_main_playlists.RDS")) %>% 
+#   filter(str_detect(playlist_name, "(?i)rata"))
 
 # + nieuwe overhouden ----
 nipper_main_playlists_new <- nipper_main_playlists_cur %>% 
-  anti_join(nipper_main_playlists_his, by = c("program_date" = "program_date",
-                                              "time_start" = "time_start"))
+  anti_join(wp_stock, by = c("program_date" = "program_date", "time_start" = "time_start"))
 
 if (nrow(nipper_main_playlists_new) > 0) {
-  # add new to his
-  nipper_main_playlists_his <- nipper_main_playlists_his %>% 
-    bind_rows(nipper_main_playlists_new)
-  write_rds(nipper_main_playlists_his, paste0(rds_home, "nipper_main_playlists.RDS"))
+  # # add new to his
+  # nipper_main_playlists_his <- nipper_main_playlists_his %>% 
+  #   bind_rows(nipper_main_playlists_new)
   
   # add to database ----
   sql_result <- dbAppendTable(conn = ns_con, "wp_nipper_main_playlists", 
@@ -195,3 +205,5 @@ dbDisconnect(ns_con)
 
 flog.info("= = = = = NipperStudio Nieuwe Week, Stop = = = = =", name = "nsbw_log")
 flog.info(" ", name = "nsbw_log")
+
+
