@@ -67,3 +67,18 @@ get_ns_conn <- function(db_env) {
   )
   return(result)
 }
+
+get_ns_week <- function(rds_file) {
+  
+  fa <- flog.appender(appender.file("c:/cz_salsa/Logs/nipperstudio_build_week.log"), name = "nsbw_log")
+
+  result <- tryCatch( {
+    suppressWarnings(read_rds(paste0(rds_home, rds_file)))
+  },
+  error = function(cond) {
+    flog.error(sprintf("%s not found", rds_file), name = "nsbw_log")
+    return("file not found")
+  }
+  )
+  return(result)
+}

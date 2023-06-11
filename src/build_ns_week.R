@@ -15,7 +15,14 @@ source("src/shared_functions.R", encoding = "UTF-8")
 # }))
 
 # + nieuwe gidsweek ophalen ----
-ns_week <- read_rds(paste0(rds_home, "nipperstudio_week.RDS"))
+ns_week <- get_ns_week("nipperstudio_week.RDS")
+
+if (ns_week == "file not found") {
+  flog.info("= = = = = NipperStudio Nieuwe Week, Stop = = = = =", name = "nsbw_log")
+  flog.info(" ", name = "nsbw_log")
+  stop("Er lijkt geen nieuwe gidsweek te zijn aangemaakt")
+}
+
 log_txt <- paste0("deze week: ", min(ns_week$date_time), " - ", max(ns_week$date_time))
 flog.info(log_txt, name = "nsbw_log")
 
