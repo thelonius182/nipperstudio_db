@@ -17,9 +17,9 @@ source("src/shared_functions.R", encoding = "UTF-8")
 # + nieuwe gidsweek ophalen ----
 ns_week <- get_ns_week("nipperstudio_week.RDS")
 
-if (ns_week == "file not found") {
+if (is.null(ns_week)) {
+  flog.info("Er lijkt geen nieuwe gidsweek te zijn aangemaakt", name = "nsbw_log")
   flog.info("= = = = = NipperStudio Nieuwe Week, Stop = = = = =", name = "nsbw_log")
-  flog.info(" ", name = "nsbw_log")
   stop("Er lijkt geen nieuwe gidsweek te zijn aangemaakt")
 }
 
@@ -93,6 +93,7 @@ no_posts <- "Geen gepubliceerde posts gevonden voor deze week >> geen playlists 
 
 if (nrow(post_ids) == 0) {
   flog.info(no_posts, name = "nsbw_log")
+  flog.info("= = = = = NipperStudio Nieuwe Week, Stop = = = = =", name = "nsbw_log")
   dbDisconnect(ns_con)
 }
 
@@ -178,7 +179,7 @@ if (nrow(nipper_main_playlists_err) > 0) {
 }
 
 # + lees WP-voorraad ----
-query <- "select * from wp_nipper_main_playlists"
+query <- "select * from wp_nipper_main_playlists where deleted = 0"
 wp_stock <- dbGetQuery(ns_con, query)
 # nipper_main_playlists_his <- read_rds(paste0(rds_home, "nipper_main_playlists.RDS")) %>% 
 #   filter(str_detect(playlist_name, "(?i)rata"))
@@ -210,7 +211,7 @@ dbDisconnect(ns_con)
 # 
 # write_delim(bufo_cur, "c:/cz_salsa/bufo.tsv", delim = "\t")
 
+flog.info(paste0("toegevoegd: ",
+                 str_flatten(nipper_main_playlists_new$playlist_name, collapse = ", ")), 
+          name = "nsbw_log")
 flog.info("= = = = = NipperStudio Nieuwe Week, Stop = = = = =", name = "nsbw_log")
-flog.info(" ", name = "nsbw_log")
-
-

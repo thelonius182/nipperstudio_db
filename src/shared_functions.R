@@ -77,7 +77,7 @@ get_ns_week <- function(rds_file) {
   },
   error = function(cond) {
     flog.error(sprintf("%s not found", rds_file), name = "nsbw_log")
-    return("file not found")
+    return(NULL)
   }
   )
   return(result)
