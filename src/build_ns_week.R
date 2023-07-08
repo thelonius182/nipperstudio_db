@@ -23,8 +23,8 @@ if (is.null(ns_week)) {
   stop("Er lijkt geen nieuwe gidsweek te zijn aangemaakt")
 }
 
-log_txt <- paste0("deze week: ", min(ns_week$date_time), " - ", max(ns_week$date_time))
-flog.info(log_txt, name = "nsbw_log")
+# log_txt <- paste0("deze week: ", min(ns_week$date_time), " - ", max(ns_week$date_time))
+# flog.info(log_txt, name = "nsbw_log")
 
 # + pgm-titel normalseren ----
 ns_week.1 <- ns_week %>% 
